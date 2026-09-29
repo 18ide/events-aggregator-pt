@@ -43,6 +43,7 @@ class EventsProviderClient:
                 base_url=self._base_url,
                 headers={"x-api-key": self._api_key},
                 timeout=self._timeout,
+                follow_redirects=True,
             )
 
     async def close(self) -> None:
@@ -78,10 +79,21 @@ class EventsProviderClient:
         return response.json()
 
     async def fetch_events_by_url(self, url: str) -> dict[str, Any]:
-        """Fetch a page using a full URL (e.g. the `next` field from a response)."""
+        """Fetch a page using a full URL (e.g. the `next` field from a response).
+
+        The provider occasionally returns `http://` URLs in the `next` field even
+        when the base URL is https. We normalize the scheme before requesting.
+        """
+        url = self._normalize_url(url)
         response = await self.client.get(url)
         self._raise_for_status(response)
         return response.json()
+
+    def _normalize_url(self, url: str) -> str:
+        """Force the scheme of a provider-returned URL to match our base URL."""
+        if self._base_url.startswith("https://") and url.startswith("http://"):
+            return "https://" + url[len("http://") :]
+        return url
 
     async def fetch_seats(self, event_id: str) -> list[str]:
         response = await self.client.get(f"/api/events/{event_id}/seats/")

@@ -1,7 +1,8 @@
 import pytest
 import respx
-from app.services.events_provider import EventsProviderClient, EventsProviderError
 from httpx import Response
+
+from app.services.events_provider import EventsProviderClient, EventsProviderError
 
 BASE_URL = "http://events-provider.test"
 API_KEY = "test-key"

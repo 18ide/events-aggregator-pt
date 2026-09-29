@@ -1,8 +1,20 @@
 #!/bin/bash
-set -e
+set -uo pipefail
 
-echo "=== diag mode: simple http server ==="
+echo "=== events-aggregator starting ==="
 echo "PORT=${PORT:-<not set>}"
-echo "Start at $(date)"
+echo "DATABASE_URL set: $([ -n "${DATABASE_URL:-}" ] && echo yes || echo no)"
+echo "EVENTS_PROVIDER_URL: ${EVENTS_PROVIDER_URL:-<not set>}"
+echo "EVENTS_PROVIDER_API_KEY set: $([ -n "${EVENTS_PROVIDER_API_KEY:-}" ] && echo yes || echo no)"
 
-exec python3 -m http.server "${PORT:-8000}" --bind 0.0.0.0
+echo "=== alembic upgrade head ==="
+/app/.venv/bin/python -m alembic upgrade head
+ALEMBIC_STATUS=$?
+echo "alembic exit code: $ALEMBIC_STATUS"
+if [ $ALEMBIC_STATUS -ne 0 ]; then
+  echo "!!! MIGRATION FAILED, ABORTING !!!"
+  exit $ALEMBIC_STATUS
+fi
+
+echo "=== starting uvicorn on 0.0.0.0:${PORT:-8000} ==="
+exec /app/.venv/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port "${PORT:-8000}" --workers 1 --proxy-headers

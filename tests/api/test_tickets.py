@@ -32,6 +32,7 @@ def usecase(client: AsyncMock, session: MagicMock) -> CreateTicketUseCase:
     uc = CreateTicketUseCase(client=client, session=session)
     uc._events = AsyncMock()
     uc._tickets = AsyncMock()
+    uc._outbox = AsyncMock()
     return uc
 
 
@@ -86,4 +87,5 @@ async def test_create_ticket_success(usecase: CreateTicketUseCase) -> None:
 
     assert ticket_id == "ticket-xyz"
     usecase._tickets.create.assert_awaited_once()
+    usecase._outbox.create.assert_awaited_once()
     usecase._session.commit.assert_awaited_once()

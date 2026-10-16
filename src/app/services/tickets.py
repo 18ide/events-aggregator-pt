@@ -15,6 +15,7 @@ from app.errors import (
     TicketNotFoundError,
 )
 from app.repositories.events import SqlAlchemyEventRepository
+from app.repositories.outbox import SqlAlchemyOutboxRepository
 from app.repositories.tickets import SqlAlchemyTicketRepository
 from app.services.events_provider import EventsProviderClient, EventsProviderError
 
@@ -33,6 +34,7 @@ class CreateTicketUseCase:
         self._session = session
         self._events = SqlAlchemyEventRepository(session)
         self._tickets = SqlAlchemyTicketRepository(session)
+        self._outbox = SqlAlchemyOutboxRepository(session)
 
     async def do(
         self,
@@ -76,7 +78,6 @@ class CreateTicketUseCase:
                     seat=seat,
                 )
             except EventsProviderError as exc:
-                # Provider может вернуть 400 "seat already sold" при гонке.
                 raise SeatNotAvailableError(str(exc)) from exc
 
         await self._tickets.create(
@@ -87,8 +88,24 @@ class CreateTicketUseCase:
             email=email,
             seat=seat,
         )
+        await self._outbox.create(
+            event_type="ticket_purchased",
+            payload={
+                "ticket_id": ticket_id,
+                "event_id": str(event_id),
+                "first_name": first_name,
+                "last_name": last_name,
+                "email": email,
+                "seat": seat,
+            },
+        )
         await self._session.commit()
-        logger.info("Ticket %s created for event %s seat %s", ticket_id, event_id, seat)
+        logger.info(
+            "Ticket %s created for event %s seat %s",
+            ticket_id,
+            event_id,
+            seat,
+        )
         return ticket_id
 
 

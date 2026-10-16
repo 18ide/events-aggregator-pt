@@ -4,7 +4,7 @@ from datetime import date
 from typing import Any, Protocol
 from uuid import UUID
 
-from app.db.models import Event, Place, SyncMetadata, Ticket
+from app.db.models import Event, OutboxEntry, Place, SyncMetadata, Ticket
 
 
 class PlaceRepository(Protocol):
@@ -46,3 +46,10 @@ class SyncMetadataRepository(Protocol):
     async def mark_success(self, last_changed_at: str) -> None: ...
 
     async def mark_failure(self, error: str) -> None: ...
+
+
+class OutboxRepository(Protocol):
+    async def create(self, event_type: str, payload: dict[str, Any]) -> OutboxEntry: ...
+    async def get_pending(self, limit: int) -> list[OutboxEntry]: ...
+    async def mark_sent(self, entry: OutboxEntry) -> None: ...
+    async def mark_failed(self, entry: OutboxEntry, error: str) -> None: ...

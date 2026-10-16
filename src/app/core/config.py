@@ -11,10 +11,10 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    # Option 1: full DATABASE_URL (used locally via .env).
+    # Локально: DATABASE_URL из .env
     database_url: str | None = None
 
-    # Option 2: individual POSTGRES_* variables (provided by LMS).
+    # В LMS: POSTGRES_*
     postgres_connection_string: str | None = None
     postgres_host: str | None = None
     postgres_port: int | None = None
@@ -25,6 +25,10 @@ class Settings(BaseSettings):
     events_provider_url: str
     events_provider_api_key: str
     sync_interval_seconds: int = 86400
+
+    outbox_poll_interval_seconds: int = 5
+    outbox_batch_size: int = 10
+    outbox_max_attempts: int = 10
 
     @model_validator(mode="after")
     def _resolve_database_url(self) -> Settings:
@@ -42,7 +46,7 @@ class Settings(BaseSettings):
             self.postgres_password,
             self.postgres_database_name,
         )
-        if all(value is not None for value in required):
+        if all(v is not None for v in required):
             self.database_url = (
                 f"postgresql+asyncpg://{self.postgres_username}:{self.postgres_password}"
                 f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_database_name}"
@@ -51,12 +55,11 @@ class Settings(BaseSettings):
 
         raise ValueError(
             "Cannot resolve database URL: set DATABASE_URL, POSTGRES_CONNECTION_STRING, "
-            "or all POSTGRES_HOST/PORT/USERNAME/PASSWORD/DATABASE_NAME"
+            "or all POSTGRES_* variables"
         )
 
 
 def _to_asyncpg_url(url: str) -> str:
-    """Convert a plain postgres URL to one using the asyncpg driver."""
     if url.startswith("postgres://"):
         return "postgresql+asyncpg://" + url[len("postgres://") :]
     if url.startswith("postgresql://"):

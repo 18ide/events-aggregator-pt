@@ -12,6 +12,7 @@ from fastapi.responses import JSONResponse
 from app.api.routers import events, health, sync, tickets
 from app.core.logging import configure_logging
 from app.errors import DomainError
+from app.services.outbox import outbox_worker
 from app.services.worker import sync_worker
 
 logger = logging.getLogger(__name__)
@@ -20,14 +21,18 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Starting Events Aggregator")
-    task = asyncio.create_task(sync_worker())
+    sync_task = asyncio.create_task(sync_worker())
+    outbox_task = asyncio.create_task(outbox_worker())
     try:
         yield
     finally:
         logger.info("Shutting down Events Aggregator")
-        task.cancel()
+        sync_task.cancel()
+        outbox_task.cancel()
         with contextlib.suppress(asyncio.CancelledError):
-            await task
+            await sync_task
+        with contextlib.suppress(asyncio.CancelledError):
+            await outbox_task
 
 
 configure_logging()

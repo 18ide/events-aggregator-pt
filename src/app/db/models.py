@@ -108,3 +108,18 @@ class OutboxEntry(Base):
         index=True,
     )
     sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class IdempotencyKey(Base):
+    __tablename__ = "idempotency_keys"
+
+    key: Mapped[str] = mapped_column(String(255), primary_key=True)
+    event_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True))
+    seat: Mapped[str] = mapped_column(String(32))
+    email: Mapped[str] = mapped_column(String(255))
+    ticket_id: Mapped[str] = mapped_column(String(64))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        index=True,
+    )

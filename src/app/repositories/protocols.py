@@ -4,7 +4,14 @@ from datetime import date
 from typing import Any, Protocol
 from uuid import UUID
 
-from app.db.models import Event, OutboxEntry, Place, SyncMetadata, Ticket
+from app.db.models import (
+    Event,
+    IdempotencyKey,
+    OutboxEntry,
+    Place,
+    SyncMetadata,
+    Ticket,
+)
 
 
 class PlaceRepository(Protocol):
@@ -50,6 +57,26 @@ class SyncMetadataRepository(Protocol):
 
 class OutboxRepository(Protocol):
     async def create(self, event_type: str, payload: dict[str, Any]) -> OutboxEntry: ...
-    async def get_pending(self, limit: int) -> list[OutboxEntry]: ...
+
+    async def get_pending(
+        self,
+        limit: int,
+        max_attempts: int = 10,
+    ) -> list[OutboxEntry]: ...
+
     async def mark_sent(self, entry: OutboxEntry) -> None: ...
+
     async def mark_failed(self, entry: OutboxEntry, error: str) -> None: ...
+
+
+class IdempotencyRepository(Protocol):
+    async def get(self, key: str) -> IdempotencyKey | None: ...
+
+    async def create(
+        self,
+        key: str,
+        event_id: UUID,
+        seat: str,
+        email: str,
+        ticket_id: str,
+    ) -> IdempotencyKey: ...

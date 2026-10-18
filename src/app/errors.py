@@ -40,3 +40,8 @@ class TicketNotFoundError(DomainError):
 class ProviderUnavailableError(DomainError):
     status_code = 502
     code = "provider_unavailable"
+
+
+class IdempotencyConflictError(DomainError):
+    status_code = 409
+    code = "idempotency_conflict"

@@ -39,6 +39,7 @@ async def create_ticket(
         last_name=payload.last_name,
         email=payload.email,
         seat=payload.seat,
+        idempotency_key=payload.idempotency_key,
     )
     return TicketCreateResponse(ticket_id=ticket_id)
 

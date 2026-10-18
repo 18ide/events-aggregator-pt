@@ -11,6 +11,17 @@ class TicketCreateRequest(BaseModel):
     last_name: str = Field(min_length=1, max_length=255)
     email: EmailStr
     seat: str = Field(min_length=1, max_length=32)
+    idempotency_key: str | None = Field(
+        default=None,
+        max_length=255,
+        description=(
+            "Optional idempotency key. If the same key was used before with the "
+            "same request data (event_id, seat, email), the original ticket is "
+            "returned with HTTP 201. If the key was used with different data, "
+            "HTTP 409 Conflict is returned. If omitted, every request is "
+            "processed as new."
+        ),
+    )
 
 
 class TicketCreateResponse(BaseModel):

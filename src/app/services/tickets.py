@@ -23,8 +23,6 @@ logger = logging.getLogger(__name__)
 
 
 class CreateTicketUseCase:
-    """Business logic for registering a user on an event."""
-
     def __init__(
         self,
         client: EventsProviderClient,
@@ -93,6 +91,7 @@ class CreateTicketUseCase:
             payload={
                 "ticket_id": ticket_id,
                 "event_id": str(event_id),
+                "event_name": event.name,
                 "first_name": first_name,
                 "last_name": last_name,
                 "email": email,
@@ -110,8 +109,6 @@ class CreateTicketUseCase:
 
 
 class CancelTicketUseCase:
-    """Business logic for cancelling a registration by ticket id."""
-
     def __init__(
         self,
         client: EventsProviderClient,

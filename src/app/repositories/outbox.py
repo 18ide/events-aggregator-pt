@@ -27,10 +27,15 @@ class SqlAlchemyOutboxRepository:
         await self._session.flush()
         return entry
 
-    async def get_pending(self, limit: int) -> list[OutboxEntry]:
+    async def get_pending(
+        self,
+        limit: int,
+        max_attempts: int = 10,
+    ) -> list[OutboxEntry]:
         stmt = (
             select(OutboxEntry)
             .where(OutboxEntry.status == PENDING)
+            .where(OutboxEntry.attempts < max_attempts)
             .order_by(OutboxEntry.created_at.asc())
             .limit(limit)
         )

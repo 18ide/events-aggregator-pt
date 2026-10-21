@@ -99,9 +99,3 @@ async def validation_error_handler(request: Request, exc: RequestValidationError
         status_code=400,
         content={"detail": exc.errors()},
     )
-
-
-@app.get("/api/debug/sentry-test", include_in_schema=False)
-async def sentry_test() -> dict[str, str]:
-    """Temporary endpoint to verify GlitchTip integration. Remove after testing."""
-    raise RuntimeError("Sentry test: intentional error to verify GlitchTip")

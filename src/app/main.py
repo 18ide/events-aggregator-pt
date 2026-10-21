@@ -11,6 +11,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from sentry_sdk.integrations.fastapi import FastApiIntegration
 from sentry_sdk.integrations.starlette import StarletteIntegration
+from sentry_sdk.transport import HttpTransport
 
 from app.api.routers import events, health, sync, tickets
 from app.core.config import settings
@@ -19,6 +20,25 @@ from app.errors import DomainError
 from app.services.worker import sync_worker
 
 logger = logging.getLogger(__name__)
+
+
+class NoSslVerifyTransport(HttpTransport):
+    """HttpTransport that skips SSL verification.
+
+    GlitchTip uses a self-signed certificate issued by an internal CA.
+    Without this override, sentry-sdk silently drops events on SSL errors.
+    """
+
+    def _get_pool(self):
+        from urllib3 import PoolManager
+        from urllib3.util.retry import Retry
+
+        return PoolManager(
+            num_pools=10,
+            maxsize=10,
+            cert_reqs="CERT_NONE",
+            retries=Retry(0),
+        )
 
 
 configure_logging()
@@ -33,8 +53,9 @@ if settings.glitchtip_dsn:
         traces_sample_rate=0.0,
         send_default_pii=False,
         environment="production",
+        transport=NoSslVerifyTransport,
     )
-    logger.info("Sentry/GlitchTip initialized")
+    logger.info("Sentry/GlitchTip initialized (SSL verify disabled)")
 else:
     logger.info("GLITCHTIP_DSN not set, Sentry disabled")
 

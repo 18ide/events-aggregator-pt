@@ -1,39 +1,48 @@
 #!/bin/bash
 DIAG=/tmp/diag.txt
 {
-  echo "=== python httpx connectivity ==="
+  echo "=== DNS lookup candidates ==="
   cd /app
   PYTHONPATH=/app/src /app/.venv/bin/python -c "
-import httpx
+import socket
 
-tests = [
-    ('external https', 'https://glitchtip.dev-2.python-labs.ru/api/0/'),
-    ('internal svc http', 'http://student-system-glitchtip-web.student-system-glitchtip.svc:8000/api/0/'),
-    ('internal svc https', 'https://student-system-glitchtip-web.student-system-glitchtip.svc:8000/api/0/'),
+candidates = [
+    'student-system-glitchtip-web.student-system-glitchtip.svc',
+    'student-system-glitchtip-web.student-system-glitchtip.svc.cluster.local',
+    'glitchtip-web.glitchtip.svc',
+    'glitchtip-web.glitchtip.svc.cluster.local',
+    'student-system-glitchtip.svc',
+    'glitchtip.svc',
+    'student-system-events-provider-web.student-system-events-provider.svc',
 ]
 
-for name, url in tests:
+for host in candidates:
     try:
-        r = httpx.get(url, verify=False, timeout=5)
-        print(f'{name}: HTTP {r.status_code}')
+        ip = socket.gethostbyname(host)
+        print(f'OK  {host} -> {ip}')
     except Exception as e:
-        print(f'{name}: FAILED — {type(e).__name__}: {e}')
+        print(f'FAIL {host} -> {e}')
 " 2>&1
 
   echo ""
-  echo "=== dns lookup ==="
+  echo "=== HTTP connectivity (httpx) ==="
   PYTHONPATH=/app/src /app/.venv/bin/python -c "
-import socket
-hosts = [
-    'glitchtip.dev-2.python-labs.ru',
-    'student-system-glitchtip-web.student-system-glitchtip.svc',
+import httpx
+
+urls = [
+    'http://student-system-glitchtip-web.student-system-glitchtip.svc:8000/api/0/',
+    'http://glitchtip-web.glitchtip.svc:8000/api/0/',
+    'http://student-system-glitchtip.svc:8000/api/0/',
+    'http://glitchtip.svc:8000/api/0/',
+    'https://glitchtip.dev-2.python-labs.ru/api/0/',
 ]
-for h in hosts:
+
+for url in urls:
     try:
-        ip = socket.gethostbyname(h)
-        print(f'{h} -> {ip}')
+        r = httpx.get(url, verify=False, timeout=3.0, follow_redirects=True)
+        print(f'HTTP {r.status_code}  {url}')
     except Exception as e:
-        print(f'{h} -> FAILED: {e}')
+        print(f'ERR  {type(e).__name__}  {url}')
 " 2>&1
 } > "$DIAG" 2>&1
 

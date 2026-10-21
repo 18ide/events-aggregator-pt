@@ -17,16 +17,16 @@ from app.api.routers import events, health, sync, tickets
 from app.core.config import settings
 from app.core.logging import configure_logging
 from app.errors import DomainError
+from app.services.outbox import outbox_worker
 from app.services.worker import sync_worker
 
 logger = logging.getLogger(__name__)
 
 
 class NoSslVerifyTransport(HttpTransport):
-    """HttpTransport that skips SSL verification.
+    """HttpTransport that skips SSL verification (for self-signed GlitchTip CA).
 
-    GlitchTip uses a self-signed certificate issued by an internal CA.
-    Without this override, sentry-sdk silently drops events on SSL errors.
+    Not used when DSN is http://, but kept in case it flips back to https.
     """
 
     def _get_pool(self):
@@ -55,7 +55,7 @@ if settings.glitchtip_dsn:
         environment="production",
         transport=NoSslVerifyTransport,
     )
-    logger.info("Sentry/GlitchTip initialized (SSL verify disabled)")
+    logger.info("Sentry/GlitchTip initialized")
 else:
     logger.info("GLITCHTIP_DSN not set, Sentry disabled")
 
@@ -63,14 +63,18 @@ else:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Starting Events Aggregator")
-    task = asyncio.create_task(sync_worker())
+    sync_task = asyncio.create_task(sync_worker())
+    outbox_task = asyncio.create_task(outbox_worker())
     try:
         yield
     finally:
         logger.info("Shutting down Events Aggregator")
-        task.cancel()
+        sync_task.cancel()
+        outbox_task.cancel()
         with contextlib.suppress(asyncio.CancelledError):
-            await task
+            await sync_task
+        with contextlib.suppress(asyncio.CancelledError):
+            await outbox_task
 
 
 app = FastAPI(

@@ -6,16 +6,20 @@ import logging
 from contextlib import asynccontextmanager
 
 import sentry_sdk
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from sentry_sdk.integrations.fastapi import FastApiIntegration
 from sentry_sdk.integrations.starlette import StarletteIntegration
 from sentry_sdk.transport import HttpTransport
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.routers import events, health, sync, tickets
 from app.core.config import settings
 from app.core.logging import configure_logging
+from app.db.models import OutboxEntry
+from app.db.session import get_session
 from app.errors import DomainError
 from app.services.outbox import outbox_worker
 from app.services.worker import sync_worker
@@ -24,10 +28,7 @@ logger = logging.getLogger(__name__)
 
 
 class NoSslVerifyTransport(HttpTransport):
-    """HttpTransport that skips SSL verification (for self-signed GlitchTip CA).
-
-    Not used when DSN is http://, but kept in case it flips back to https.
-    """
+    """HttpTransport that skips SSL verification (for self-signed GlitchTip CA)."""
 
     def _get_pool(self):
         from urllib3 import PoolManager
@@ -103,3 +104,23 @@ async def validation_error_handler(request: Request, exc: RequestValidationError
         status_code=400,
         content={"detail": exc.errors()},
     )
+
+
+@app.get("/api/debug/outbox", include_in_schema=False)
+async def debug_outbox(session: AsyncSession = Depends(get_session)):
+    stmt = select(OutboxEntry).order_by(OutboxEntry.created_at.desc()).limit(30)
+    rows = (await session.execute(stmt)).scalars().all()
+    return {
+        "count": len(rows),
+        "entries": [
+            {
+                "ticket_id": e.payload.get("ticket_id"),
+                "status": e.status,
+                "attempts": e.attempts,
+                "last_error": e.last_error,
+                "created_at": e.created_at.isoformat() if e.created_at else None,
+                "sent_at": e.sent_at.isoformat() if e.sent_at else None,
+            }
+            for e in rows
+        ],
+    }

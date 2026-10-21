@@ -5,37 +5,52 @@ import contextlib
 import logging
 from contextlib import asynccontextmanager
 
+import sentry_sdk
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from sentry_sdk.integrations.fastapi import FastApiIntegration
+from sentry_sdk.integrations.starlette import StarletteIntegration
 
 from app.api.routers import events, health, sync, tickets
+from app.core.config import settings
 from app.core.logging import configure_logging
 from app.errors import DomainError
-from app.services.outbox import outbox_worker
 from app.services.worker import sync_worker
 
 logger = logging.getLogger(__name__)
 
 
+configure_logging()
+
+if settings.glitchtip_dsn:
+    sentry_sdk.init(
+        dsn=settings.glitchtip_dsn,
+        integrations=[
+            StarletteIntegration(transaction_style="endpoint"),
+            FastApiIntegration(transaction_style="endpoint"),
+        ],
+        traces_sample_rate=0.0,
+        send_default_pii=False,
+        environment="production",
+    )
+    logger.info("Sentry/GlitchTip initialized")
+else:
+    logger.info("GLITCHTIP_DSN not set, Sentry disabled")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Starting Events Aggregator")
-    sync_task = asyncio.create_task(sync_worker())
-    outbox_task = asyncio.create_task(outbox_worker())
+    task = asyncio.create_task(sync_worker())
     try:
         yield
     finally:
         logger.info("Shutting down Events Aggregator")
-        sync_task.cancel()
-        outbox_task.cancel()
+        task.cancel()
         with contextlib.suppress(asyncio.CancelledError):
-            await sync_task
-        with contextlib.suppress(asyncio.CancelledError):
-            await outbox_task
+            await task
 
-
-configure_logging()
 
 app = FastAPI(
     title="Events Aggregator",
@@ -59,8 +74,13 @@ async def domain_error_handler(request: Request, exc: DomainError) -> JSONRespon
 
 @app.exception_handler(RequestValidationError)
 async def validation_error_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
-    """Return 400 for validation errors instead of FastAPI's default 422."""
     return JSONResponse(
         status_code=400,
         content={"detail": exc.errors()},
     )
+
+
+@app.get("/api/debug/sentry-test", include_in_schema=False)
+async def sentry_test() -> dict[str, str]:
+    """Temporary endpoint to verify GlitchTip integration. Remove after testing."""
+    raise RuntimeError("Sentry test: intentional error to verify GlitchTip")

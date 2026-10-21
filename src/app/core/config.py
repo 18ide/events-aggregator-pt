@@ -33,6 +33,8 @@ class Settings(BaseSettings):
     capashino_url: str
     capashino_api_key: str
 
+    glitchtip_dsn: str | None = None
+
     @model_validator(mode="after")
     def _resolve_database_url(self) -> Settings:
         if self.database_url:

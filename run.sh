@@ -1,39 +1,39 @@
 #!/bin/bash
 DIAG=/tmp/diag.txt
 {
-  echo "=== curl verify-on ==="
-  curl -s -o /dev/null -w "status: %{http_code}\n" --max-time 5 https://glitchtip.dev-2.python-labs.ru/api/0/
-
-  echo "=== curl verify-off ==="
-  curl -sk -o /dev/null -w "status: %{http_code}\n" --max-time 5 https://glitchtip.dev-2.python-labs.ru/api/0/
-
-  echo "=== internal .svc ==="
-  curl -s -o /dev/null -w "status: %{http_code}\n" --max-time 5 http://student-system-glitchtip-web.student-system-glitchtip.svc:8000/api/0/
-
-  echo "=== python sentry test ==="
+  echo "=== python httpx connectivity ==="
   cd /app
   PYTHONPATH=/app/src /app/.venv/bin/python -c "
-import os
-from sentry_sdk.transport import HttpTransport
-import sentry_sdk
-from sentry_sdk.integrations.fastapi import FastApiIntegration
-from sentry_sdk.integrations.starlette import StarletteIntegration
+import httpx
 
-class NoVerify(HttpTransport):
-    def _get_pool(self):
-        from urllib3 import PoolManager
-        from urllib3.util.retry import Retry
-        return PoolManager(num_pools=10, maxsize=10, cert_reqs='CERT_NONE', retries=Retry(0))
+tests = [
+    ('external https', 'https://glitchtip.dev-2.python-labs.ru/api/0/'),
+    ('internal svc http', 'http://student-system-glitchtip-web.student-system-glitchtip.svc:8000/api/0/'),
+    ('internal svc https', 'https://student-system-glitchtip-web.student-system-glitchtip.svc:8000/api/0/'),
+]
 
-dsn = os.environ.get('GLITCHTIP_DSN')
-sentry_sdk.init(dsn=dsn, transport=NoVerify, traces_sample_rate=0.0)
-try:
-    raise RuntimeError('diag with SSL off')
-except Exception as e:
-    eid = sentry_sdk.capture_exception(e)
-    print('captured:', eid)
-sentry_sdk.flush(timeout=10)
-print('flush done')
+for name, url in tests:
+    try:
+        r = httpx.get(url, verify=False, timeout=5)
+        print(f'{name}: HTTP {r.status_code}')
+    except Exception as e:
+        print(f'{name}: FAILED — {type(e).__name__}: {e}')
+" 2>&1
+
+  echo ""
+  echo "=== dns lookup ==="
+  PYTHONPATH=/app/src /app/.venv/bin/python -c "
+import socket
+hosts = [
+    'glitchtip.dev-2.python-labs.ru',
+    'student-system-glitchtip-web.student-system-glitchtip.svc',
+]
+for h in hosts:
+    try:
+        ip = socket.gethostbyname(h)
+        print(f'{h} -> {ip}')
+    except Exception as e:
+        print(f'{h} -> FAILED: {e}')
 " 2>&1
 } > "$DIAG" 2>&1
 
